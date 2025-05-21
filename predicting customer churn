@@ -1,58 +1,68 @@
+# === Import Libraries ===
 import pandas as pd
 pd.set_option('display.max_columns', None)
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import plotly.express as px
-import plotly.figure_factory as ff
-color_pallet = ["#c05095","#8512a1","#4d0d80","#2f0e53","#b63082"]
-data = pd.read_csv("/kaggle/input/telco-customer-churn/WA_Fn-UseC_-Telco-Customer-Churn.csv")
-data.head()
-data.info()
-values = data["TotalCharges"].unique()
+import plotly.graph_objects as go
 
-strCounter = 0
-for val in values:
-    try:
-        float(val)
-    except:
-        print("the wrong val:",val)
-        strCounter +=1
-if strCounter == 0:
-    print("It all integer values")
- data["TotalCharges"].value_counts()[" "]
-data["TotalCharges"] =  data["TotalCharges"].replace(" ", np.nan)
-data["TotalCharges"] =  data["TotalCharges"].astype("float")
+# === Color Palette ===
+color_pallet = ["#c05095", "#8512a1", "#4d0d80", "#2f0e53", "#b63082"]
+
+# === Load Data ===
+data = pd.read_csv("/content/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+
+# === Inspect Data ===
+print(data.head())
+print(data.info())
+
+# === Check and Clean TotalCharges Column ===
+# Find non-numeric values in TotalCharges
+invalid_values = [val for val in data["TotalCharges"].unique() if not str(val).replace('.', '', 1).isdigit()]
+print("Invalid TotalCharges values:", invalid_values)
+
+# Replace space with NaN and convert to float
+data["TotalCharges"] = data["TotalCharges"].replace(" ", np.nan).astype("float")
+
+# Check missing values
+print(data.isnull().sum())
+
+# Fill missing TotalCharges where tenure is 0 with 0
+data.loc[data["tenure"] == 0, "TotalCharges"] = 0
+
+# Confirm cleanup
 data.info()
-data.columns
+
+# === Standardize Text Columns ===
+data.replace({"No internet service": "No", "No phone service": "No"}, inplace=True)
+
+# === Print Value Counts for Object Columns ===
 for column in data.columns:
     if column == "customerID":
         continue
     if data[column].dtype == "O":
-        print("Coulmn name:",column)
+        print(f"Column: {column}")
         print(data[column].value_counts())
-        print("-"*50)
-data.replace({"No internet service":"No","No phone service":"No"},inplace=True)
-data.isnull().sum()
-data[data["TotalCharges"].isnull()]
-data[data["tenure"]==0]# So we can fill nan value with 0
-data.fillna(0,inplace = True)
-data.describe(include="all").T
-pie = go.Pie(labels=data["Churn"].value_counts().index,
-             values=data["Churn"].value_counts().values,
-             pull =[.05,0],
-            rotation = 10,
-            marker_colors=color_pallet[2:])
-fig = go.Figure(data=[pie])
-fig.update_layout(
-     title_text="Churn percentage"
+        print("-" * 50)
+
+# === Basic Summary ===
+print(data.describe(include="all").T)
+
+# === Pie Chart: Churn Percentage ===
+pie = go.Pie(
+    labels=data["Churn"].value_counts().index,
+    values=data["Churn"].value_counts().values,
+    pull=[0.05, 0],
+    rotation=10,
+    marker_colors=color_pallet[2:]
 )
+fig = go.Figure(data=[pie])
+fig.update_layout(title_text="Churn Percentage")
 fig.show()
-gender_churn=(data.groupby(["Churn","gender"])["gender"].count())
-gender_churn = gender_churn.reset_index(name='count')
-gender_churn
+
+# === Bar Plot: Churn by Gender ===
+gender_churn = data.groupby(["Churn", "gender"])["gender"].count().reset_index(name='count')
 fig = px.bar(
     gender_churn,
     x='gender',
@@ -61,38 +71,65 @@ fig = px.bar(
     barmode='group',
     text='count',
     title='Churn by Gender',
-    color_discrete_sequence= color_pallet[1:]
+    color_discrete_sequence=color_pallet[1:]
 )
-
-
-
 fig.show()
-SeniorGB = data.groupby(["Churn","SeniorCitizen"])["gender"].count().reset_index(name="count")
 
+# === Bar Plot: Churn by Senior Citizen ===
+senior_churn = data.groupby(["Churn", "SeniorCitizen"])["gender"].count().reset_index(name="count")
+fig = px.bar(
+    senior_churn,
+    x="SeniorCitizen",
+    y="count",
+    color="Churn",
+    text="count",
+    title='Churn by Senior Citizen',
+    color_discrete_sequence=color_pallet[1:]
+)
+fig.show()
 
-SeniorGB
-SeniorGB = data.groupby(["Churn","SeniorCitizen"])["gender"].count().reset_index(name="count")
+# === Box Plot: Monthly Charges by Senior ===
+fig = px.box(data, x="SeniorCitizen", y="MonthlyCharges", points="all", color_discrete_sequence=color_pallet[1:], title="Seniors' Monthly Cost")
+fig.show()
 
-fig = px.bar(SeniorGB,x="SeniorCitizen",y="count", color="Churn", text="count", color_discrete_sequence= color_pallet[1:],title='Churn by Senior')
+# === Box Plot: Monthly Charges by Contract and Senior ===
+fig = px.box(
+    data,
+    x="Contract",
+    y="MonthlyCharges",
+    color="SeniorCitizen",
+    color_discrete_sequence=color_pallet,
+    title="Monthly Charges by Contract and Senior Status"
+)
 fig.show()
-fig = px.box(data, x="SeniorCitizen", y="MonthlyCharges", color_discrete_sequence= color_pallet[1:], points="all",title="Seniors monthly cost")
-fig.show()
-fig = px.box(data, x="Contract", y="MonthlyCharges", color_discrete_sequence= color_pallet, color="SeniorCitizen")
-fig.show()
+
+# === Box Plot: Monthly Charges by Payment Method and Contract ===
 fig = px.box(
     data,
     x="PaymentMethod",
     y="MonthlyCharges",
     color="SeniorCitizen",
     facet_col="Contract",
-    color_discrete_sequence=color_pallet
+    color_discrete_sequence=color_pallet,
+    title="Monthly Charges by Payment Method and Contract"
 )
 fig.show()
-sns.histplot(data=data, x="TotalCharges",hue="SeniorCitizen",kde=True,palette= color_pallet,multiple="stack")
+
+# === Histogram: Total Charges by Senior ===
+sns.histplot(data=data, x="TotalCharges", hue="SeniorCitizen", kde=True, palette=color_pallet, multiple="dodge")
+plt.title("Total Charges by Senior Citizen")
 plt.show()
-fig = px.violin(data, y="tenure", color="SeniorCitizen", box=True,color_discrete_sequence=color_pallet )
-fig.show()sns.histplot(data=data, x="tenure",hue="Churn",kde=True,palette= color_pallet,multiple="dodge")
+
+# === Violin Plot: Tenure by Senior ===
+fig = px.violin(data, y="tenure", color="SeniorCitizen", box=True, color_discrete_sequence=color_pallet, title="Tenure by Senior Citizen")
+fig.show()
+
+# === Histogram: Tenure by Churn ===
+sns.histplot(data=data, x="tenure", hue="Churn", kde=True, palette=color_pallet, multiple="dodge")
+plt.title("Tenure by Churn")
 plt.show()
+
+# === Boolean Column Mapping and KDE Plots ===
 bool_data = data.copy()
 bool_cols = []
 
@@ -105,46 +142,38 @@ for col in bool_data.columns:
         elif set(unique_vals).issubset({0, 1, True, False}):
             bool_cols.append(col)
 
-# Step 2: Plot KDE for each Boolean column (based on a numerical column like MonthlyCharges)
+# Plot histograms for Boolean columns
 for col in bool_cols:
     plt.figure(figsize=(6, 4))
-    sns.histplot(data=bool_data, x=col, hue="Churn",palette= color_pallet,multiple="dodge")
-    plt.title(f' {col}')
-
-    plt.ylabel('Density')
-    # plt.legend(title=col)
+    sns.histplot(data=bool_data, x=col, hue="Churn", palette=color_pallet, multiple="dodge")
+    plt.title(f'Churn Distribution for {col}')
+    plt.ylabel('Count')
     plt.tight_layout()
     plt.show()
-internet_seniorGB = data.groupby(["InternetService","Churn"])["Churn"].count().reset_index(name="count")
 
-
+# === Bar Plot: Churn by Internet Service ===
+internet_churn = data.groupby(["InternetService", "Churn"])["Churn"].count().reset_index(name="count")
 fig = px.bar(
-    internet_seniorGB,
+    internet_churn,
     x='count',
     y='InternetService',
     color='Churn',
     barmode='group',
-    text='Churn',
-    title='Churn by Internt Service ',
-    color_discrete_sequence= color_pallet[1:]
+    text='count',
+    title='Churn by Internet Service',
+    color_discrete_sequence=color_pallet[1:]
 )
-
-
-
 fig.show()
-internet_monthGB = data.groupby(["InternetService"])["MonthlyCharges"].mean().reset_index(name="MonthlyCharges mean")
 
-
+# === Bar Plot: Monthly Charges Mean by Internet Service ===
+internet_month_avg = data.groupby("InternetService")["MonthlyCharges"].mean().reset_index(name="MonthlyCharges Mean")
 fig = px.bar(
-    internet_monthGB,
-    x='MonthlyCharges mean',
+    internet_month_avg,
+    x='MonthlyCharges Mean',
     y='InternetService',
     color='InternetService',
     barmode='group',
-    title='MonthlyCharges mean by internetService',
-    color_discrete_sequence= color_pallet
+    title='Monthly Charges Mean by Internet Service',
+    color_discrete_sequence=color_pallet
 )
-
-
-
 fig.show()
